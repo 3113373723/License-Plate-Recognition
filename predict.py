@@ -269,7 +269,7 @@ class CardPredictor:
 		#equ = cv2.equalizeHist(img)
 		#img = np.hstack((img, equ))
 		#去掉图像中不会是车牌的区域
-		kernel = np.ones((20, 20), np.uint8)
+		kernel = np.ones((10, 10), np.uint8)
 		img_opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
 		# cv2.imshow('open', img_opening)
 		img_opening = cv2.addWeighted(img, 1, img_opening, -1, 0)
@@ -559,7 +559,8 @@ class CardPredictor:
 if __name__ == '__main__':
 	c = CardPredictor()
 	c.train_svm()
-	r, roi, color = c.predict("2.jpg")
+	# cA019W2 偏斜的图片
+	r, roi, color = c.predict("D:/TongjiPatternRecognition/License-Plate-Recognition-master/License-Plate-Recognition-master/test/car3.jpg")
 	print(r)
 	turtle.done()
 	
