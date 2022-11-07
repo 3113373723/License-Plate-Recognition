@@ -1,3 +1,5 @@
+import turtle
+
 import cv2
 import numpy as np
 from numpy.linalg import norm
@@ -260,32 +262,47 @@ class CardPredictor:
 		if blur > 0:
 			img = cv2.GaussianBlur(img, (blur, blur), 0)#图片分辨率调整
 		oldimg = img
+		# cv2.imshow('blur', img)
+		# 灰度化
 		img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+		# cv2.imshow('Gray', img)
 		#equ = cv2.equalizeHist(img)
 		#img = np.hstack((img, equ))
 		#去掉图像中不会是车牌的区域
 		kernel = np.ones((20, 20), np.uint8)
 		img_opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-		img_opening = cv2.addWeighted(img, 1, img_opening, -1, 0);
+		# cv2.imshow('open', img_opening)
+		img_opening = cv2.addWeighted(img, 1, img_opening, -1, 0)
+		# cv2.imshow('origin', img_opening)
 
 		#找到图像边缘
+		# 二值化 Otsu 滤波
+		# 第一个retVal（得到的阈值值），第二个就是阈值化后的图像。
 		ret, img_thresh = cv2.threshold(img_opening, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+		# cv2.imshow('erzhihua', img_thresh)
+		# sobel 边缘检测
 		img_edge = cv2.Canny(img_thresh, 100, 200)
 		#使用开运算和闭运算让图像边缘成为一个整体
+		# 4 19
 		kernel = np.ones((self.cfg["morphologyr"], self.cfg["morphologyc"]), np.uint8)
+		# 先闭操作连接 后开操作消除
 		img_edge1 = cv2.morphologyEx(img_edge, cv2.MORPH_CLOSE, kernel)
+		cv2.imshow('edge1', img_edge1)
 		img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_OPEN, kernel)
+		cv2.imshow('edge2', img_edge2)
 
 		#查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
 		try:
 			contours, hierarchy = cv2.findContours(img_edge2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 		except ValueError:
 			image, contours, hierarchy = cv2.findContours(img_edge2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		# 尺寸判断操作
 		contours = [cnt for cnt in contours if cv2.contourArea(cnt) > Min_Area]
 		print('len(contours)', len(contours))
 		#一一排除不是车牌的矩形区域
 		car_contours = []
 		for cnt in contours:
+			# 生成最小外接矩阵
 			rect = cv2.minAreaRect(cnt)
 			area_width, area_height = rect[1]
 			if area_width < area_height:
@@ -297,20 +314,22 @@ class CardPredictor:
 				car_contours.append(rect)
 				box = cv2.boxPoints(rect)
 				box = np.int0(box)
-				#oldimg = cv2.drawContours(oldimg, [box], 0, (0, 0, 255), 2)
-				#cv2.imshow("edge4", oldimg)
-				#cv2.waitKey(0)
+				oldimg = cv2.drawContours(oldimg, [box], 0, (0, 0, 255), 2)
+				cv2.imshow("edge4", oldimg)
+				cv2.waitKey(0)
 
 		print(len(car_contours))
 
 		print("精确定位")
 		card_imgs = []
 		#矩形区域可能是倾斜的矩形，需要矫正，以便使用颜色定位
+		# 只是进行了旋转矫正
 		for rect in car_contours:
 			if rect[2] > -1 and rect[2] < 1:#创造角度，使得左、高、右、低拿到正确的值
 				angle = 1
 			else:
 				angle = rect[2]
+			# 貌似可扩大边缘优化
 			rect = (rect[0], (rect[1][0]+5, rect[1][1]+5), angle)#扩大范围，避免车牌边缘被排除
 
 			box = cv2.boxPoints(rect)
@@ -325,7 +344,7 @@ class CardPredictor:
 					heigth_point = point
 				if right_point[0] < point[0]:
 					right_point = point
-
+			# 几何方法进行旋转矫正，不懂细节
 			if left_point[1] <= right_point[1]:#正角度
 				new_right_point = [right_point[0], heigth_point[1]]
 				pts2 = np.float32([left_point, heigth_point, new_right_point])#字符只是高度需要改变
@@ -337,8 +356,8 @@ class CardPredictor:
 				point_limit(left_point)
 				card_img = dst[int(left_point[1]):int(heigth_point[1]), int(left_point[0]):int(new_right_point[0])]
 				card_imgs.append(card_img)
-				#cv2.imshow("card", card_img)
-				#cv2.waitKey(0)
+				# cv2.imshow("card_positive", card_img)
+				# cv2.waitKey(0)
 			elif left_point[1] > right_point[1]:#负角度
 				
 				new_left_point = [left_point[0], heigth_point[1]]
@@ -351,8 +370,8 @@ class CardPredictor:
 				point_limit(new_left_point)
 				card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
 				card_imgs.append(card_img)
-				#cv2.imshow("card", card_img)
-				#cv2.waitKey(0)
+				# cv2.imshow("card_negative", card_img)
+				# cv2.waitKey(0)
 		#开始使用颜色定位，排除不是车牌的矩形，目前只识别蓝、绿、黄车牌
 		colors = []
 		for card_index,card_img in enumerate(card_imgs):
@@ -542,4 +561,5 @@ if __name__ == '__main__':
 	c.train_svm()
 	r, roi, color = c.predict("2.jpg")
 	print(r)
+	turtle.done()
 	

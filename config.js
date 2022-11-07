@@ -2,7 +2,7 @@
 	"config":[
 	{
 		"open":1,
-		"blur":3,
+		"blur":5,
 		"morphologyr":4,
 		"morphologyc":19,
 		"col_num_limit":10,
@@ -10,7 +10,7 @@
 	},
 	{
 		"open":0,
-		"blur":3,
+		"blur":5,
 		"morphologyr":5,
 		"morphologyc":12,
 		"col_num_limit":10,
