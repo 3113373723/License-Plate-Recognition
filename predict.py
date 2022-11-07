@@ -282,33 +282,48 @@ class CardPredictor:
         if blur > 0:
             img = cv2.GaussianBlur(img, (blur, blur), 0)  # 图片分辨率调整
         oldimg = img
-        # cv2.imshow('blur', img)
+        cv2.imshow('blur', img)
+        # 通过颜色识别区域
+        lower_blue = np.array([100, 55, 46])
+        upper_blue = np.array([130, 255, 255])
+        lower_yellow = np.array([26, 55, 55])
+        upper_yellow = np.array([34, 255, 255])
+
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
+        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow)
+        # 根据阈值找到对应颜色 并灰度化
+        img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
+        cv2.imshow('hsv', img_hsv)
+        cv2.waitKey(0)
         # 灰度化
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('Gray', img)
         # equ = cv2.equalizeHist(img)
         # img = np.hstack((img, equ))
         # 去掉图像中不会是车牌的区域
         kernel = np.ones((10, 10), np.uint8)
-        img_opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
+        # img_opening = cv2.morphologyEx(img_hsv, cv2.MORPH_OPEN, kernel)
         # cv2.imshow('open', img_opening)
-        img_opening = cv2.addWeighted(img, 1, img_opening, -1, 0)
+        # img_opening = cv2.addWeighted(img_hsv, 1, img_opening, -1, 0)
         # cv2.imshow('origin', img_opening)
 
         # 找到图像边缘
         # 二值化 Otsu 滤波
         # 第一个retVal（得到的阈值值），第二个就是阈值化后的图像。
-        ret, img_thresh = cv2.threshold(img_opening, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        # cv2.imshow('erzhihua', img_thresh)
+        ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        cv2.imshow('erzhihua', img_thresh)
         # sobel 边缘检测
-        img_edge = cv2.Canny(img_thresh, 100, 200)
+        # img_edge = cv2.Canny(img_thresh, 100, 200)
+        # cv2.imshow('edge', img_edge)
         # 使用开运算和闭运算让图像边缘成为一个整体
         # 4 19
-        kernel = np.ones((self.cfg["morphologyr"], self.cfg["morphologyc"]), np.uint8)
-        # 先闭操作连接 后开操作消除
-        img_edge1 = cv2.morphologyEx(img_edge, cv2.MORPH_CLOSE, kernel)
+        # kernel = np.ones((self.cfg["morphologyr"], self.cfg["morphologyc"]), np.uint8)
+        # 先开操作消除 后闭操作连接
+        img_edge1 = cv2.morphologyEx(img_thresh, cv2.MORPH_OPEN, kernel)
         cv2.imshow('edge1', img_edge1)
-        img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_OPEN, kernel)
+        img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_CLOSE, kernel)
         cv2.imshow('edge2', img_edge2)
 
         # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
@@ -408,11 +423,11 @@ class CardPredictor:
                     H = card_img_hsv.item(i, j, 0)
                     S = card_img_hsv.item(i, j, 1)
                     V = card_img_hsv.item(i, j, 2)
-                    if 11 < H <= 34 and S > 34:  # 图片分辨率调整
+                    if 11 < H <= 50 and S > 43:  # 图片分辨率调整
                         yello += 1
-                    elif 35 < H <= 99 and S > 34:  # 图片分辨率调整
+                    elif 35 < H <= 77 and S > 43:  # 图片分辨率调整
                         green += 1
-                    elif 99 < H <= 124 and S > 34:  # 图片分辨率调整
+                    elif 85 < H <= 130 and S > 34:  # 图片分辨率调整
                         blue += 1
 
                     if 0 < H < 180 and 0 < S < 255 and 0 < V < 46:
