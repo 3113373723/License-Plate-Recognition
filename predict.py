@@ -1,5 +1,5 @@
 import turtle
-
+import math
 import cv2
 import numpy as np
 from numpy.linalg import norm
@@ -345,7 +345,7 @@ class CardPredictor:
             wh_ratio = area_width / area_height
             # print(wh_ratio)
             # 要求矩形区域长宽比在2到5.5之间，2到5.5是车牌的长宽比，其余的矩形排除
-            if wh_ratio > 2 and wh_ratio < 5.5:
+            if wh_ratio > 2 and wh_ratio < 4.5:
                 car_contours.append(rect)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
@@ -365,7 +365,7 @@ class CardPredictor:
             else:
                 angle = rect[2]
             # 貌似可扩大边缘优化
-            rect = (rect[0], (rect[1][0] + 5, rect[1][1] + 5), angle)  # 扩大范围，避免车牌边缘被排除
+            rect = (rect[0], (rect[1][0] + 10, rect[1][1] + 10), angle)  # 扩大范围，避免车牌边缘被排除
 
             box = cv2.boxPoints(rect)
             heigth_point = right_point = [0, 0]
@@ -382,10 +382,16 @@ class CardPredictor:
             # 几何方法进行旋转矫正，不懂细节
             if left_point[1] <= right_point[1]:  # 正角度
                 new_right_point = [right_point[0], heigth_point[1]]
+                # new_left_point = [heigth_point[0], left_point[1]]
+                # new_low_point = [right_point[0], left_point[1]]
                 pts2 = np.float32([left_point, heigth_point, new_right_point])  # 字符只是高度需要改变
                 pts1 = np.float32([left_point, heigth_point, right_point])
+                # pts2 = np.float32([left_point, heigth_point, new_right_point, low_point])  # 字符只是高度需要改变
+                # pts1 = np.float32([left_point, heigth_point, right_point, low_point])
                 M = cv2.getAffineTransform(pts1, pts2)
                 dst = cv2.warpAffine(oldimg, M, (pic_width, pic_hight))
+                # M = cv2.getPerspectiveTransform(pts1, pts2)
+                # dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
                 point_limit(new_right_point)
                 point_limit(heigth_point)
                 point_limit(left_point)
@@ -394,19 +400,92 @@ class CardPredictor:
             # cv2.imshow("card_positive", card_img)
             # cv2.waitKey(0)
             elif left_point[1] > right_point[1]:  # 负角度
-
-                new_left_point = [left_point[0], heigth_point[1]]
-                pts2 = np.float32([new_left_point, heigth_point, right_point])  # 字符只是高度需要改变
+                # new_low_point = [left_point[0], (low_point[1]-((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1])))]
+                # new_height_point = [right_point[0],(heigth_point[1]+((heigth_point[0]-right_point[0])*(heigth_point[0]-right_point[0])/(heigth_point[1]-right_point[1])))]
+                
+                # new_left_point = [low_point[0],left_point[1]+((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1]))]
+                # new_right_point = [heigth_point[0],right_point[1]-((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1]))]
+                
+                new_left_point = [heigth_point[0], left_point[1]]
+                new_right_point = [right_point[0], heigth_point[1]]
+                pts2 = np.float32([new_left_point, heigth_point, new_right_point])  # 字符只是高度需要改变
+                # new_left_point_1 = [heigth_point[0],left_point[1]+((heigth_point[0]-left_point[0])*(heigth_point[0]-left_point[0])/abs(left_point[1]-heigth_point[1]))]
+                # new_right_point_1 = [low_point[0],right_point[1]-((right_point[0]-low_point[0])*(right_point[0]-low_point[0])/abs(low_point[1]-right_point[1]))]
+                ratio = (heigth_point[0]-left_point[0])/(left_point[1]-heigth_point[1])
                 pts1 = np.float32([left_point, heigth_point, right_point])
+                # width = math.sqrt((new_height_point[0]-left_point[0])*(new_height_point[0]-left_point[0])+(new_height_point[1]-left_point[1])*(new_height_point[1]-left_point[1]))
+                # height = left_point[1]-new_low_point[1]
+                
+                # pts2 = np.float32([left_point, new_height_point, right_point, new_low_point])  # 字符只是高度需要改变
+                # pts1 = np.float32([left_point, heigth_point, right_point, low_point])
+                
+                # pts2 = np.float32([new_left_point, heigth_point, new_right_point, low_point])  # 字符只是高度需要改变
+                # pts1 = np.float32([left_point, heigth_point, right_point, low_point])
                 M = cv2.getAffineTransform(pts1, pts2)
+                # M = cv2.getPerspectiveTransform(pts1, pts2)
                 dst = cv2.warpAffine(oldimg, M, (pic_width, pic_hight))
+                # dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
+                cv2.imshow("dst",dst)
+                cv2.waitKey(0)
+                point_limit(left_point)
                 point_limit(right_point)
                 point_limit(heigth_point)
+                point_limit(new_right_point)
                 point_limit(new_left_point)
-                card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
+                # point_limit(new_height_point)
+                # point_limit(new_low_point)
+                card_img = dst[int(new_left_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(new_right_point[0])]
+                # card_img = dst[int(right_point[1]):int(new_height_point[1]), int(left_point[0]):int(right_point[0])]
+                cv2.imshow("card_img",card_img)
+                cv2.waitKey(0)
+
+                pts3 = np.float32([new_left_point[0]+(heigth_point[1]-new_left_point[1])*ratio, ])
+
                 card_imgs.append(card_img)
+
+            # left_point_x = np.min(box[:, 0])
+            # right_point_x = np.max(box[:, 0])
+            # top_point_y = np.min(box[:, 1])
+            # bottom_point_y = np.max(box[:, 1])
+
+            # left_point_y = box[:, 1][np.where(box[:, 0] == left_point_x)][0]
+            # right_point_y = box[:, 1][np.where(box[:, 0] == right_point_x)][0]
+            # top_point_x = box[:, 0][np.where(box[:, 1] == top_point_y)][0]
+            # bottom_point_x = box[:, 0][np.where(box[:, 1] == bottom_point_y)][0]
+            # # 上下左右四个点坐标
+            # vertices = np.array([[top_point_x, top_point_y], [bottom_point_x, bottom_point_y], [left_point_x, left_point_y], [right_point_x, right_point_y]])
+            # if rect[2] > -45:
+            #     new_right_point_x = vertices[0, 0]
+            #     new_right_point_y = int(vertices[1, 1] - (vertices[0, 0]- vertices[1, 0]) / (vertices[3, 0] - vertices[1, 0]) * (vertices[1, 1] - vertices[3, 1]))
+            #     new_left_point_x = vertices[1, 0]
+            #     new_left_point_y = int(vertices[0, 1] + (vertices[0, 0] - vertices[1, 0]) / (vertices[0, 0] - vertices[2, 0]) * (vertices[2, 1] - vertices[0, 1]))
+            #     # 校正前平行四边形四个顶点坐标
+            #     new_box = np.array([(vertices[0, 0], vertices[0, 1]), (new_left_point_x, new_left_point_y), (vertices[1, 0], vertices[1, 1]), (new_right_point_x, new_right_point_y)])
+            #     point_set_0 = np.float32(new_box)
+            #     # 校正后的四个顶点坐标
+            #     point_set_1 = np.float32([[pic_width, 0],[0, 0],[0, pic_hight],[pic_width, pic_hight]])
+            #     M = cv2.getPerspectiveTransform(point_set_0, point_set_1)
+            #     dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
+            #     card_img = dst[int(left_point_y):int(top_point_y), int(left_point_x):int(new_right_point_x)]
+            #     card_imgs.append(card_img)
+            #     # 畸变情况2
+            # elif rect[2] < -45:
+            #     new_right_point_x = vertices[1, 0]
+            #     new_right_point_y = int(vertices[0, 1] + (vertices[1, 0] - vertices[0, 0]) / (vertices[3, 0] - vertices[0, 0]) * (vertices[3, 1] - vertices[0, 1]))
+            #     new_left_point_x = vertices[0, 0]
+            #     new_left_point_y = int(vertices[1, 1] - (vertices[1, 0] - vertices[0, 0]) / (vertices[1, 0] - vertices[2, 0]) * (vertices[1, 1] - vertices[2, 1]))
+            #     # 校正前平行四边形四个顶点坐标
+            #     new_box = np.array([(vertices[0, 0], vertices[0, 1]), (new_left_point_x, new_left_point_y), (vertices[1, 0], vertices[1, 1]), (new_right_point_x, new_right_point_y)])
+            #     point_set_0 = np.float32(new_box)
+            #     # 校正后的四个顶点坐标
+            #     point_set_1 = np.float32([[0, 0],[0, pic_hight],[pic_width, pic_hight],[pic_width, 0]])
+            #     M = cv2.getPerspectiveTransform(point_set_0, point_set_1)
+            #     dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
+            #     card_img = dst[int(right_point_y):int(top_point_y), int(new_left_point_x):int(right_point_x)]
+            #     card_imgs.append(card_img)
             # cv2.imshow("card_negative", card_img)
             # cv2.waitKey(0)
+
         # 开始使用颜色定位，排除不是车牌的矩形，目前只识别蓝、绿、黄车牌
         colors = []
         for card_index, card_img in enumerate(card_imgs):
@@ -603,6 +682,6 @@ if __name__ == '__main__':
     c.train_svm()
     # cA019W2 偏斜的图片
     r, roi, color = c.predict(
-        "D:/TongjiPatternRecognition/License-Plate-Recognition-master/License-Plate-Recognition-master/test/car3.jpg")
+        "test/cA019W2.jpg")
     print(r)
     turtle.done()
