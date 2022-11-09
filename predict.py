@@ -279,14 +279,15 @@ class CardPredictor:
         print("h,w:", pic_hight, pic_width)
         blur = self.cfg["blur"]
         # 高斯去噪
+        oldimg = img
         if blur > 0:
             img = cv2.GaussianBlur(img, (blur, blur), 0)  # 图片分辨率调整
-        oldimg = img
+        # oldimg = img
         cv2.imshow('blur', img)
         # 通过颜色识别区域
-        lower_blue = np.array([100, 55, 46])
+        lower_blue = np.array([100, 73, 46])
         upper_blue = np.array([130, 255, 255])
-        lower_yellow = np.array([26, 55, 55])
+        lower_yellow = np.array([11, 43, 46])
         upper_yellow = np.array([34, 255, 255])
 
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -322,9 +323,9 @@ class CardPredictor:
         # kernel = np.ones((self.cfg["morphologyr"], self.cfg["morphologyc"]), np.uint8)
         # 先开操作消除 后闭操作连接
         img_edge1 = cv2.morphologyEx(img_thresh, cv2.MORPH_OPEN, kernel)
-        cv2.imshow('edge1', img_edge1)
+        # cv2.imshow('edge1', img_edge1)
         img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_CLOSE, kernel)
-        cv2.imshow('edge2', img_edge2)
+        # cv2.imshow('edge2', img_edge2)
 
         # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
         try:
@@ -345,13 +346,13 @@ class CardPredictor:
             wh_ratio = area_width / area_height
             # print(wh_ratio)
             # 要求矩形区域长宽比在2到5.5之间，2到5.5是车牌的长宽比，其余的矩形排除
-            if wh_ratio > 2 and wh_ratio < 4.5:
+            if wh_ratio > 2 and wh_ratio < 5.5:
                 car_contours.append(rect)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
-                oldimg = cv2.drawContours(oldimg, [box], 0, (0, 0, 255), 2)
-                cv2.imshow("edge4", oldimg)
-                cv2.waitKey(0)
+                newimg = cv2.drawContours(oldimg, [box], 0, (0, 0, 255), 2)
+                cv2.imshow("edge4", newimg)
+                # cv2.waitKey(0)
 
         print(len(car_contours))
 
@@ -365,7 +366,7 @@ class CardPredictor:
             else:
                 angle = rect[2]
             # 貌似可扩大边缘优化
-            rect = (rect[0], (rect[1][0] + 10, rect[1][1] + 10), angle)  # 扩大范围，避免车牌边缘被排除
+            rect = (rect[0], (rect[1][0] + 12, rect[1][1] + 12), angle)  # 扩大范围，避免车牌边缘被排除
 
             box = cv2.boxPoints(rect)
             heigth_point = right_point = [0, 0]
@@ -405,13 +406,14 @@ class CardPredictor:
                 
                 # new_left_point = [low_point[0],left_point[1]+((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1]))]
                 # new_right_point = [heigth_point[0],right_point[1]-((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1]))]
-                
-                new_left_point = [heigth_point[0], left_point[1]]
-                new_right_point = [right_point[0], heigth_point[1]]
+                ratio = (heigth_point[0]-left_point[0])/(left_point[1]-heigth_point[1])
+                width = math.sqrt((right_point[0]-heigth_point[0])*(right_point[0]-heigth_point[0])+(heigth_point[1]-right_point[1])*(heigth_point[1]-right_point[1]))
+                new_left_point = [heigth_point[0], left_point[1]+(heigth_point[0]-left_point[0])*ratio]
+                new_right_point = [heigth_point[0]+width, heigth_point[1]]
                 pts2 = np.float32([new_left_point, heigth_point, new_right_point])  # 字符只是高度需要改变
                 # new_left_point_1 = [heigth_point[0],left_point[1]+((heigth_point[0]-left_point[0])*(heigth_point[0]-left_point[0])/abs(left_point[1]-heigth_point[1]))]
                 # new_right_point_1 = [low_point[0],right_point[1]-((right_point[0]-low_point[0])*(right_point[0]-low_point[0])/abs(low_point[1]-right_point[1]))]
-                ratio = (heigth_point[0]-left_point[0])/(left_point[1]-heigth_point[1])
+                
                 pts1 = np.float32([left_point, heigth_point, right_point])
                 # width = math.sqrt((new_height_point[0]-left_point[0])*(new_height_point[0]-left_point[0])+(new_height_point[1]-left_point[1])*(new_height_point[1]-left_point[1]))
                 # height = left_point[1]-new_low_point[1]
@@ -426,7 +428,7 @@ class CardPredictor:
                 dst = cv2.warpAffine(oldimg, M, (pic_width, pic_hight))
                 # dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
                 cv2.imshow("dst",dst)
-                cv2.waitKey(0)
+                # cv2.waitKey(0)
                 point_limit(left_point)
                 point_limit(right_point)
                 point_limit(heigth_point)
@@ -437,54 +439,23 @@ class CardPredictor:
                 card_img = dst[int(new_left_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(new_right_point[0])]
                 # card_img = dst[int(right_point[1]):int(new_height_point[1]), int(left_point[0]):int(right_point[0])]
                 cv2.imshow("card_img",card_img)
+                # cv2.waitKey(0)
+
+                pts3 = np.float32([[new_left_point[0]+(heigth_point[1]-new_left_point[1])*(ratio), new_left_point[1]],
+                                                                            [new_right_point[0],new_left_point[1]],
+                                                                            [heigth_point[0],heigth_point[1]],
+                                                                            [new_right_point[0]-(heigth_point[1]-new_left_point[1])*(ratio),new_right_point[1]]])
+                # pts3 = np.float32([[new_left_point[0], new_left_point[1]],
+                #                                                             [new_right_point[0]+(heigth_point[1]-new_left_point[1])*(0.4*ratio),new_left_point[1]],
+                #                                                             [heigth_point[0]-(heigth_point[1]-new_left_point[1])*(0.4*ratio),heigth_point[1]],
+                #                                                             [new_right_point[0],new_right_point[1]]])
+                pts4 = np.float32([new_left_point,[new_right_point[0],new_left_point[1]],heigth_point,new_right_point])
+                m = cv2.getPerspectiveTransform(pts4,pts3)
+                dst = cv2.warpPerspective(dst, m, (pic_width, pic_hight))
+                card_img = dst[int(new_left_point[1]):int(heigth_point[1]), int(new_left_point[0])-25:int(new_right_point[0])+20]
+                cv2.imshow("dst2",card_img)
                 cv2.waitKey(0)
-
-                pts3 = np.float32([new_left_point[0]+(heigth_point[1]-new_left_point[1])*ratio, ])
-
                 card_imgs.append(card_img)
-
-            # left_point_x = np.min(box[:, 0])
-            # right_point_x = np.max(box[:, 0])
-            # top_point_y = np.min(box[:, 1])
-            # bottom_point_y = np.max(box[:, 1])
-
-            # left_point_y = box[:, 1][np.where(box[:, 0] == left_point_x)][0]
-            # right_point_y = box[:, 1][np.where(box[:, 0] == right_point_x)][0]
-            # top_point_x = box[:, 0][np.where(box[:, 1] == top_point_y)][0]
-            # bottom_point_x = box[:, 0][np.where(box[:, 1] == bottom_point_y)][0]
-            # # 上下左右四个点坐标
-            # vertices = np.array([[top_point_x, top_point_y], [bottom_point_x, bottom_point_y], [left_point_x, left_point_y], [right_point_x, right_point_y]])
-            # if rect[2] > -45:
-            #     new_right_point_x = vertices[0, 0]
-            #     new_right_point_y = int(vertices[1, 1] - (vertices[0, 0]- vertices[1, 0]) / (vertices[3, 0] - vertices[1, 0]) * (vertices[1, 1] - vertices[3, 1]))
-            #     new_left_point_x = vertices[1, 0]
-            #     new_left_point_y = int(vertices[0, 1] + (vertices[0, 0] - vertices[1, 0]) / (vertices[0, 0] - vertices[2, 0]) * (vertices[2, 1] - vertices[0, 1]))
-            #     # 校正前平行四边形四个顶点坐标
-            #     new_box = np.array([(vertices[0, 0], vertices[0, 1]), (new_left_point_x, new_left_point_y), (vertices[1, 0], vertices[1, 1]), (new_right_point_x, new_right_point_y)])
-            #     point_set_0 = np.float32(new_box)
-            #     # 校正后的四个顶点坐标
-            #     point_set_1 = np.float32([[pic_width, 0],[0, 0],[0, pic_hight],[pic_width, pic_hight]])
-            #     M = cv2.getPerspectiveTransform(point_set_0, point_set_1)
-            #     dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
-            #     card_img = dst[int(left_point_y):int(top_point_y), int(left_point_x):int(new_right_point_x)]
-            #     card_imgs.append(card_img)
-            #     # 畸变情况2
-            # elif rect[2] < -45:
-            #     new_right_point_x = vertices[1, 0]
-            #     new_right_point_y = int(vertices[0, 1] + (vertices[1, 0] - vertices[0, 0]) / (vertices[3, 0] - vertices[0, 0]) * (vertices[3, 1] - vertices[0, 1]))
-            #     new_left_point_x = vertices[0, 0]
-            #     new_left_point_y = int(vertices[1, 1] - (vertices[1, 0] - vertices[0, 0]) / (vertices[1, 0] - vertices[2, 0]) * (vertices[1, 1] - vertices[2, 1]))
-            #     # 校正前平行四边形四个顶点坐标
-            #     new_box = np.array([(vertices[0, 0], vertices[0, 1]), (new_left_point_x, new_left_point_y), (vertices[1, 0], vertices[1, 1]), (new_right_point_x, new_right_point_y)])
-            #     point_set_0 = np.float32(new_box)
-            #     # 校正后的四个顶点坐标
-            #     point_set_1 = np.float32([[0, 0],[0, pic_hight],[pic_width, pic_hight],[pic_width, 0]])
-            #     M = cv2.getPerspectiveTransform(point_set_0, point_set_1)
-            #     dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
-            #     card_img = dst[int(right_point_y):int(top_point_y), int(new_left_point_x):int(right_point_x)]
-            #     card_imgs.append(card_img)
-            # cv2.imshow("card_negative", card_img)
-            # cv2.waitKey(0)
 
         # 开始使用颜色定位，排除不是车牌的矩形，目前只识别蓝、绿、黄车牌
         colors = []
