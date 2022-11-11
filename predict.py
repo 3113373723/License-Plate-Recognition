@@ -224,7 +224,65 @@ class CardPredictor:
         if not os.path.exists("svmchinese.dat"):
             self.modelchinese.save("svmchinese.dat")
 
+    def accurate_place_color(self, card_img):
+        pic_hight, pic_width = card_img.shape[:2]
+        # 通过颜色识别区域
+        lower_blue = np.array([100, 73, 46])
+        upper_blue = np.array([130, 255, 255])
+        lower_yellow = np.array([11, 43, 46])
+        upper_yellow = np.array([34, 255, 255])
+        hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
+        mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
+        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow)
+        # 根据阈值找到对应颜色 并灰度化
+        img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
+        # cv2.imshow('gray', img_hsv)
+        kernel = np.ones((6, 6), np.uint8) # 3
+        ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # cv2.imshow('thresh', img_hsv)
+        img_edge2 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
+        # cv2.imshow('edge2', img_edge2)
+        # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
+        try:
+            contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        except ValueError:
+            image, contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # 尺寸判断操作
+        areaMax = 0
+        for cnt in contours:
+            if cv2.contourArea(cnt) > areaMax:
+                areaMax = cv2.contourArea(cnt)
+        contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= areaMax]
+        print('len(contours) color', len(contours))
+        ret_img = card_img
+        for cnt in contours:
+            print(cv2.contourArea(cnt))
+            # 生成最小外接矩阵
+            rect = cv2.minAreaRect(cnt)
+            box = cv2.boxPoints(rect)
+            box = np.int0(box)
+            heigth_point = right_point = [0, 0]
+            left_point = low_point = [pic_width, pic_hight]
+            for point in box:
+                if left_point[0] > point[0]:
+                    left_point = point
+                if low_point[1] > point[1]:
+                    low_point = point
+                if heigth_point[1] < point[1]:
+                    heigth_point = point
+                if right_point[0] < point[0]:
+                    right_point = point
+            ret_img = card_img[low_point[1]:heigth_point[1], left_point[0]:right_point[0]]
+            cv2.imshow("ret", ret_img)
+            # cv2.waitKey(0)
+        return ret_img
+
+
     def accurate_place(self, card_img_hsv, limit1, limit2, color):
+        # print("accurate_place", card_img_hsv.shape)
+        # cv2.imshow('hsv1', card_img_hsv)
+        # cv2.waitKey(0)
         row_num, col_num = card_img_hsv.shape[:2]
         xl = col_num
         xr = 0
@@ -279,11 +337,10 @@ class CardPredictor:
         print("h,w:", pic_hight, pic_width)
         blur = self.cfg["blur"]
         # 高斯去噪
-        oldimg = img
+        oldimg = img.copy()
         if blur > 0:
             img = cv2.GaussianBlur(img, (blur, blur), 0)  # 图片分辨率调整
-        # oldimg = img
-        cv2.imshow('blur', img)
+        # cv2.imshow('blur', img)
         # 通过颜色识别区域
         lower_blue = np.array([100, 73, 46])
         upper_blue = np.array([130, 255, 255])
@@ -296,15 +353,15 @@ class CardPredictor:
         img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow)
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
-        cv2.imshow('hsv', img_hsv)
-        cv2.waitKey(0)
+        # cv2.imshow('hsv', img_hsv)
+        # cv2.waitKey(0)
         # 灰度化
         # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('Gray', img)
         # equ = cv2.equalizeHist(img)
         # img = np.hstack((img, equ))
         # 去掉图像中不会是车牌的区域
-        kernel = np.ones((10, 10), np.uint8)
+        kernel = np.ones((5, 5), np.uint8)
         # img_opening = cv2.morphologyEx(img_hsv, cv2.MORPH_OPEN, kernel)
         # cv2.imshow('open', img_opening)
         # img_opening = cv2.addWeighted(img_hsv, 1, img_opening, -1, 0)
@@ -314,7 +371,7 @@ class CardPredictor:
         # 二值化 Otsu 滤波
         # 第一个retVal（得到的阈值值），第二个就是阈值化后的图像。
         ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        cv2.imshow('erzhihua', img_thresh)
+        # cv2.imshow('erzhihua', img_thresh)
         # sobel 边缘检测
         # img_edge = cv2.Canny(img_thresh, 100, 200)
         # cv2.imshow('edge', img_edge)
@@ -322,9 +379,9 @@ class CardPredictor:
         # 4 19
         # kernel = np.ones((self.cfg["morphologyr"], self.cfg["morphologyc"]), np.uint8)
         # 先开操作消除 后闭操作连接
-        img_edge1 = cv2.morphologyEx(img_thresh, cv2.MORPH_OPEN, kernel)
+        img_edge1 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow('edge1', img_edge1)
-        img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_CLOSE, kernel)
+        img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_OPEN, kernel)
         # cv2.imshow('edge2', img_edge2)
 
         # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
@@ -337,20 +394,21 @@ class CardPredictor:
         print('len(contours)', len(contours))
         # 一一排除不是车牌的矩形区域
         car_contours = []
+        line_img = oldimg.copy()
         for cnt in contours:
             # 生成最小外接矩阵
             rect = cv2.minAreaRect(cnt)
             area_width, area_height = rect[1]
             if area_width < area_height:
                 area_width, area_height = area_height, area_width
-            wh_ratio = area_width / area_height
-            # print(wh_ratio)
+            wh_ratio = area_width / area_height  # 长宽比 这里width是高，height是宽，width比height大，高比宽大
+            print(wh_ratio)
             # 要求矩形区域长宽比在2到5.5之间，2到5.5是车牌的长宽比，其余的矩形排除
-            if wh_ratio > 2 and wh_ratio < 5.5:
+            if wh_ratio > 1.9 and wh_ratio < 4.5:
                 car_contours.append(rect)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
-                newimg = cv2.drawContours(oldimg, [box], 0, (0, 0, 255), 2)
+                newimg = cv2.drawContours(line_img, [box], 0, (0, 0, 255), 2)
                 cv2.imshow("edge4", newimg)
                 # cv2.waitKey(0)
 
@@ -381,87 +439,44 @@ class CardPredictor:
                 if right_point[0] < point[0]:
                     right_point = point
             # 几何方法进行旋转矫正，不懂细节
-            if left_point[1] <= right_point[1]:  # 正角度
+            if low_point[0] >= heigth_point[0]:  # 正角度
                 new_right_point = [right_point[0], heigth_point[1]]
-                # new_left_point = [heigth_point[0], left_point[1]]
-                # new_low_point = [right_point[0], left_point[1]]
                 pts2 = np.float32([left_point, heigth_point, new_right_point])  # 字符只是高度需要改变
                 pts1 = np.float32([left_point, heigth_point, right_point])
-                # pts2 = np.float32([left_point, heigth_point, new_right_point, low_point])  # 字符只是高度需要改变
-                # pts1 = np.float32([left_point, heigth_point, right_point, low_point])
                 M = cv2.getAffineTransform(pts1, pts2)
                 dst = cv2.warpAffine(oldimg, M, (pic_width, pic_hight))
-                # M = cv2.getPerspectiveTransform(pts1, pts2)
-                # dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
                 point_limit(new_right_point)
                 point_limit(heigth_point)
                 point_limit(left_point)
                 card_img = dst[int(left_point[1]):int(heigth_point[1]), int(left_point[0]):int(new_right_point[0])]
                 card_imgs.append(card_img)
-            # cv2.imshow("card_positive", card_img)
-            # cv2.waitKey(0)
-            elif left_point[1] > right_point[1]:  # 负角度
-                # new_low_point = [left_point[0], (low_point[1]-((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1])))]
-                # new_height_point = [right_point[0],(heigth_point[1]+((heigth_point[0]-right_point[0])*(heigth_point[0]-right_point[0])/(heigth_point[1]-right_point[1])))]
-                
-                # new_left_point = [low_point[0],left_point[1]+((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1]))]
-                # new_right_point = [heigth_point[0],right_point[1]-((low_point[0]-left_point[0])*(low_point[0]-left_point[0])/(left_point[1]-low_point[1]))]
-                ratio = (heigth_point[0]-left_point[0])/(left_point[1]-heigth_point[1])
-                width = math.sqrt((right_point[0]-heigth_point[0])*(right_point[0]-heigth_point[0])+(heigth_point[1]-right_point[1])*(heigth_point[1]-right_point[1]))
-                new_left_point = [heigth_point[0], left_point[1]+(heigth_point[0]-left_point[0])*ratio]
-                new_right_point = [heigth_point[0]+width, heigth_point[1]]
-                pts2 = np.float32([new_left_point, heigth_point, new_right_point])  # 字符只是高度需要改变
-                # new_left_point_1 = [heigth_point[0],left_point[1]+((heigth_point[0]-left_point[0])*(heigth_point[0]-left_point[0])/abs(left_point[1]-heigth_point[1]))]
-                # new_right_point_1 = [low_point[0],right_point[1]-((right_point[0]-low_point[0])*(right_point[0]-low_point[0])/abs(low_point[1]-right_point[1]))]
-                
+                cv2.imshow("card_positive", card_img)
+                cv2.waitKey(0)
+            elif low_point[0] < heigth_point[0]:  # 负角度
+                new_left_point = [left_point[0], heigth_point[1]]
+                pts2 = np.float32([new_left_point, heigth_point, right_point])  # 字符只是高度需要改变
                 pts1 = np.float32([left_point, heigth_point, right_point])
-                # width = math.sqrt((new_height_point[0]-left_point[0])*(new_height_point[0]-left_point[0])+(new_height_point[1]-left_point[1])*(new_height_point[1]-left_point[1]))
-                # height = left_point[1]-new_low_point[1]
-                
-                # pts2 = np.float32([left_point, new_height_point, right_point, new_low_point])  # 字符只是高度需要改变
-                # pts1 = np.float32([left_point, heigth_point, right_point, low_point])
-                
-                # pts2 = np.float32([new_left_point, heigth_point, new_right_point, low_point])  # 字符只是高度需要改变
-                # pts1 = np.float32([left_point, heigth_point, right_point, low_point])
                 M = cv2.getAffineTransform(pts1, pts2)
-                # M = cv2.getPerspectiveTransform(pts1, pts2)
                 dst = cv2.warpAffine(oldimg, M, (pic_width, pic_hight))
-                # dst = cv2.warpPerspective(oldimg, M, (pic_width, pic_hight))
-                cv2.imshow("dst",dst)
-                # cv2.waitKey(0)
-                point_limit(left_point)
                 point_limit(right_point)
                 point_limit(heigth_point)
-                point_limit(new_right_point)
                 point_limit(new_left_point)
-                # point_limit(new_height_point)
-                # point_limit(new_low_point)
-                card_img = dst[int(new_left_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(new_right_point[0])]
-                # card_img = dst[int(right_point[1]):int(new_height_point[1]), int(left_point[0]):int(right_point[0])]
-                cv2.imshow("card_img",card_img)
-                # cv2.waitKey(0)
-
-                pts3 = np.float32([[new_left_point[0]+(heigth_point[1]-new_left_point[1])*(ratio), new_left_point[1]],
-                                                                            [new_right_point[0],new_left_point[1]],
-                                                                            [heigth_point[0],heigth_point[1]],
-                                                                            [new_right_point[0]-(heigth_point[1]-new_left_point[1])*(ratio),new_right_point[1]]])
-                # pts3 = np.float32([[new_left_point[0], new_left_point[1]],
-                #                                                             [new_right_point[0]+(heigth_point[1]-new_left_point[1])*(0.4*ratio),new_left_point[1]],
-                #                                                             [heigth_point[0]-(heigth_point[1]-new_left_point[1])*(0.4*ratio),heigth_point[1]],
-                #                                                             [new_right_point[0],new_right_point[1]]])
-                pts4 = np.float32([new_left_point,[new_right_point[0],new_left_point[1]],heigth_point,new_right_point])
-                m = cv2.getPerspectiveTransform(pts4,pts3)
-                dst = cv2.warpPerspective(dst, m, (pic_width, pic_hight))
-                card_img = dst[int(new_left_point[1]):int(heigth_point[1]), int(new_left_point[0])-25:int(new_right_point[0])+20]
-                cv2.imshow("dst2",card_img)
-                cv2.waitKey(0)
+                card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
                 card_imgs.append(card_img)
+                cv2.imshow("card", card_img)
+                cv2.waitKey(0)
+
+            # 判断是否偏斜，矫正偏斜的情况
 
         # 开始使用颜色定位，排除不是车牌的矩形，目前只识别蓝、绿、黄车牌
         colors = []
         for card_index, card_img in enumerate(card_imgs):
+            # card_imgs[card_index] = self.accurate_place_color(card_img)
             green = yello = blue = black = white = 0
+            # cv2.imshow('hsv1', card_img)
             card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
+            card_img = card_imgs[card_index]
+            # cv2.imshow('hsv2', card_img_hsv)
             # 有转换失败的可能，原因来自于上面矫正矩形出错
             if card_img_hsv is None:
                 continue
@@ -510,38 +525,41 @@ class CardPredictor:
                 continue
             # 以上为确定车牌颜色
             # 以下为根据车牌颜色再定位，缩小边缘非车牌边界
-            xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
-            if yl == yh and xl == xr:
-                continue
-            need_accurate = False
-            if yl >= yh:
-                yl = 0
-                yh = row_num
-                need_accurate = True
-            if xl >= xr:
-                xl = 0
-                xr = col_num
-                need_accurate = True
-            card_imgs[card_index] = card_img[yl:yh, xl:xr] if color != "green" or yl < (yh - yl) // 4 else card_img[
-                                                                                                           yl - (
-                                                                                                                   yh - yl) // 4:yh,
-                                                                                                           xl:xr]
-            if need_accurate:  # 可能x或y方向未缩小，需要再试一次
-                card_img = card_imgs[card_index]
-                card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
-                xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
-                if yl == yh and xl == xr:
-                    continue
-                if yl >= yh:
-                    yl = 0
-                    yh = row_num
-                if xl >= xr:
-                    xl = 0
-                    xr = col_num
-            card_imgs[card_index] = card_img[yl:yh, xl:xr] if color != "green" or yl < (yh - yl) // 4 else card_img[
-                                                                                                           yl - (
-                                                                                                                   yh - yl) // 4:yh,
-                                                                                                           xl:xr]
+            card_imgs[card_index] = self.accurate_place_color(card_img)
+            # xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
+            # if yl == yh and xl == xr:
+            #     continue
+            # need_accurate = False
+            # if yl >= yh:
+            #     yl = 0
+            #     yh = row_num
+            #     need_accurate = True
+            # if xl >= xr:
+            #     xl = 0
+            #     xr = col_num
+            #     need_accurate = True
+            # cv2.imshow("before", card_img)
+            # card_imgs[card_index] = card_img[yl:yh, xl:xr] if color != "green" or yl < (yh - yl) // 4 else card_img[
+            #                                                                                                yl - (
+            #                                                                                                        yh - yl) // 4:yh,
+            #                                                                                                xl:xr]
+            # cv2.imshow("after", card_imgs[card_index])
+            # if need_accurate:  # 可能x或y方向未缩小，需要再试一次
+            #     card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
+            #     xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
+            #     self.accurate_place_color(card_img)
+            #     if yl == yh and xl == xr:
+            #         continue
+            #     if yl >= yh:
+            #         yl = 0
+            #         yh = row_num
+            #     if xl >= xr:
+            #         xl = 0
+            #         xr = col_num
+            # card_imgs[card_index] = card_img[yl:yh, xl:xr] if color != "green" or yl < (yh - yl) // 4 else card_img[
+            #                                                                                                yl - (
+            #                                                                                                        yh - yl) // 4:yh,
+            #                                                                                                xl:xr]
         # 以上为车牌定位
         # 以下为识别车牌中的字符
         predict_result = []
@@ -651,8 +669,8 @@ class CardPredictor:
 if __name__ == '__main__':
     c = CardPredictor()
     c.train_svm()
-    # cA019W2 偏斜的图片
+    # cA019W2 偏斜的图片 沪D71603
     r, roi, color = c.predict(
-        "test/cA019W2.jpg")
+        "test/沪D71603.jpg")
     print(r)
     turtle.done()
