@@ -231,10 +231,17 @@ class CardPredictor:
         upper_blue = np.array([130, 255, 255])
         lower_yellow = np.array([11, 43, 46])
         upper_yellow = np.array([34, 255, 255])
+        lower_green = np.array([10, 43, 46])
+        upper_green = np.array([99, 255, 255])
+        lower_black = np.array([0, 0, 0])
+        upper_black = np.array([180, 255, 46])
         hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
         mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
         mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-        img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow)
+        mask_black = cv2.inRange(hsv, lower_black, upper_black)
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+        img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow + mask_green)
+        # img_hsv = cv2.bitwise_not(hsv, hsv, mask=mask_black)
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('gray', img_hsv)
@@ -273,11 +280,79 @@ class CardPredictor:
                     heigth_point = point
                 if right_point[0] < point[0]:
                     right_point = point
+            point_limit(low_point)
+            point_limit(heigth_point)
+            point_limit(left_point)
+            point_limit(right_point)
             ret_img = card_img[low_point[1]:heigth_point[1], left_point[0]:right_point[0]]
             cv2.imshow("ret", ret_img)
-            # cv2.waitKey(0)
+            cv2.waitKey(0)
         return ret_img
 
+    def accurate_place_color_green(self, card_img):
+        pic_hight, pic_width = card_img.shape[:2]
+        # 通过颜色识别区域
+        lower_blue = np.array([100, 73, 46])
+        upper_blue = np.array([130, 255, 255])
+        lower_yellow = np.array([11, 43, 46])
+        upper_yellow = np.array([34, 255, 255])
+        lower_green = np.array([10, 30, 46])
+        upper_green = np.array([99, 255, 255])
+        # lower_black = np.array([0, 0, 0])
+        # upper_black = np.array([180, 255, 46])
+        hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
+        mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
+        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        # mask_black = cv2.inRange(hsv, lower_black, upper_black)
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+        # img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow)
+        img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_green)
+        # 根据阈值找到对应颜色 并灰度化
+        img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
+        # cv2.imshow('gray', img_hsv)
+        kernel = np.ones((6, 6), np.uint8) # 3
+        ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # cv2.imshow('thresh', img_hsv)
+        img_edge2 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
+        # cv2.imshow('edge2', img_edge2)
+        # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
+        try:
+            contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        except ValueError:
+            image, contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # 尺寸判断操作
+        areaMax = 0
+        for cnt in contours:
+            if cv2.contourArea(cnt) > areaMax:
+                areaMax = cv2.contourArea(cnt)
+        contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= areaMax]
+        print('len(contours) color', len(contours))
+        ret_img = card_img
+        for cnt in contours:
+            print(cv2.contourArea(cnt))
+            # 生成最小外接矩阵
+            rect = cv2.minAreaRect(cnt)
+            box = cv2.boxPoints(rect)
+            box = np.int0(box)
+            heigth_point = right_point = [0, 0]
+            left_point = low_point = [pic_width, pic_hight]
+            for point in box:
+                if left_point[0] > point[0]:
+                    left_point = point
+                if low_point[1] > point[1]:
+                    low_point = point
+                if heigth_point[1] < point[1]:
+                    heigth_point = point
+                if right_point[0] < point[0]:
+                    right_point = point
+            point_limit(low_point)
+            point_limit(heigth_point)
+            point_limit(left_point)
+            point_limit(right_point)
+            ret_img = card_img[low_point[1]:heigth_point[1], left_point[0]:right_point[0]]
+            cv2.imshow("ret_green", ret_img)
+            cv2.waitKey(0)
+        return ret_img
 
     def accurate_place(self, card_img_hsv, limit1, limit2, color):
         # print("accurate_place", card_img_hsv.shape)
@@ -340,28 +415,44 @@ class CardPredictor:
         oldimg = img.copy()
         if blur > 0:
             img = cv2.GaussianBlur(img, (blur, blur), 0)  # 图片分辨率调整
-        # cv2.imshow('blur', img)
+        cv2.imshow('blur', img)
+
+        # black_pixels = np.where(
+        #     (img[:, :, 0] == 0) & 
+        #     (img[:, :, 1] == 0) & 
+        #     (img[:, :, 2] == 0)
+        # )
+        # img[black_pixels] = [255, 255, 255]
+        # cv2.imshow('img', img)
+
         # 通过颜色识别区域
-        lower_blue = np.array([100, 73, 46])
+        lower_blue = np.array([100, 43, 46])
         upper_blue = np.array([130, 255, 255])
         lower_yellow = np.array([11, 43, 46])
         upper_yellow = np.array([34, 255, 255])
-
+        lower_green = np.array([35, 43, 46])
+        upper_green = np.array([99, 255, 255])
+        # lower_black = np.array([0, 0, 0])
+        # upper_black = np.array([180, 255, 46])
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
         mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-        img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow)
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+        # mask_black = cv2.inRange(hsv, lower_black, upper_black)
+        img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow + mask_green)
+        # img_hsv = cv2.bitwise_and(hsv, hsv ,mask=mask_green)
+        # img_hsv = cv2.bitwise_not(hsv, hsv, mask=mask_black)
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
-        # cv2.imshow('hsv', img_hsv)
-        # cv2.waitKey(0)
+        cv2.imshow('hsv', img_hsv)
+        cv2.waitKey(0)
         # 灰度化
         # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('Gray', img)
         # equ = cv2.equalizeHist(img)
         # img = np.hstack((img, equ))
         # 去掉图像中不会是车牌的区域
-        kernel = np.ones((5, 5), np.uint8)
+        kernel = np.ones((6, 6), np.uint8)
         # img_opening = cv2.morphologyEx(img_hsv, cv2.MORPH_OPEN, kernel)
         # cv2.imshow('open', img_opening)
         # img_opening = cv2.addWeighted(img_hsv, 1, img_opening, -1, 0)
@@ -371,7 +462,7 @@ class CardPredictor:
         # 二值化 Otsu 滤波
         # 第一个retVal（得到的阈值值），第二个就是阈值化后的图像。
         ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        # cv2.imshow('erzhihua', img_thresh)
+        cv2.imshow('erzhihua', img_thresh)
         # sobel 边缘检测
         # img_edge = cv2.Canny(img_thresh, 100, 200)
         # cv2.imshow('edge', img_edge)
@@ -382,7 +473,7 @@ class CardPredictor:
         img_edge1 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow('edge1', img_edge1)
         img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_OPEN, kernel)
-        # cv2.imshow('edge2', img_edge2)
+        cv2.imshow('edge2', img_edge2)
 
         # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
         try:
@@ -404,7 +495,7 @@ class CardPredictor:
             wh_ratio = area_width / area_height  # 长宽比 这里width是高，height是宽，width比height大，高比宽大
             print(wh_ratio)
             # 要求矩形区域长宽比在2到5.5之间，2到5.5是车牌的长宽比，其余的矩形排除
-            if wh_ratio > 1.9 and wh_ratio < 4.5:
+            if wh_ratio > 1.9 and wh_ratio < 5.5:
                 car_contours.append(rect)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
@@ -424,7 +515,7 @@ class CardPredictor:
             else:
                 angle = rect[2]
             # 貌似可扩大边缘优化
-            rect = (rect[0], (rect[1][0] + 12, rect[1][1] + 12), angle)  # 扩大范围，避免车牌边缘被排除
+            rect = (rect[0], (rect[1][0] + 5, rect[1][1] + 5), angle)  # 扩大范围，避免车牌边缘被排除
 
             box = cv2.boxPoints(rect)
             heigth_point = right_point = [0, 0]
@@ -490,14 +581,15 @@ class CardPredictor:
                     V = card_img_hsv.item(i, j, 2)
                     if 11 < H <= 50 and S > 43:  # 图片分辨率调整
                         yello += 1
-                    elif 35 < H <= 77 and S > 43:  # 图片分辨率调整
+                    elif 10 < H <= 99 and S > 43:  # 图片分辨率调整
                         green += 1
-                    elif 85 < H <= 130 and S > 34:  # 图片分辨率调整
+                    elif 85 < H <= 155 and S > 34:  # 图片分辨率调整
                         blue += 1
 
                     if 0 < H < 180 and 0 < S < 255 and 0 < V < 46:
                         black += 1
-                    elif 0 < H < 180 and 0 < S < 43 and 221 < V < 225:
+                        card_img_count -= 1
+                    elif 0 < H < 180 and 0 < S < 30 and 221 < V < 225:
                         white += 1
             color = "no"
 
@@ -506,14 +598,14 @@ class CardPredictor:
                 color = "yello"
                 limit1 = 11
                 limit2 = 34  # 有的图片有色偏偏绿
-            elif green * 2 >= card_img_count:
-                color = "green"
-                limit1 = 35
-                limit2 = 99
             elif blue * 2 >= card_img_count:
                 color = "blue"
                 limit1 = 100
                 limit2 = 124  # 有的图片有色偏偏紫
+            elif green * 4 >= card_img_count:
+                color = "green"
+                limit1 = 35
+                limit2 = 99
             elif black + white >= card_img_count * 0.7:  # TODO
                 color = "bw"
             print(color)
@@ -525,7 +617,10 @@ class CardPredictor:
                 continue
             # 以上为确定车牌颜色
             # 以下为根据车牌颜色再定位，缩小边缘非车牌边界
-            card_imgs[card_index] = self.accurate_place_color(card_img)
+            if color == "green":
+                card_imgs[card_index] = self.accurate_place_color_green(card_img)
+            else:
+                card_imgs[card_index] = self.accurate_place_color(card_img)
             # xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
             # if yl == yh and xl == xr:
             #     continue
@@ -671,6 +766,6 @@ if __name__ == '__main__':
     c.train_svm()
     # cA019W2 偏斜的图片 沪D71603
     r, roi, color = c.predict(
-        "test/沪D71603.jpg")
+        "test/cA019W2.jpg")
     print(r)
     turtle.done()
