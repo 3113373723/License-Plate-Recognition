@@ -23,7 +23,7 @@ if __name__ == '__main__':
             # resize_rates = (1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4)
             # for resize_rate in resize_rates:
             #     print("resize_rate:", resize_rate)
-            r, roi, color = self.predictor.predict(img_bgr)
+            r, roi, color = self.predictor.predict(img_bgr, ch_cnt=cnt)
                 # if r:
                 #     break
             r = ''.join(r)

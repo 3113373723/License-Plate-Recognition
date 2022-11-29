@@ -245,7 +245,7 @@ class CardPredictor:
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('gray', img_hsv)
-        kernel = np.ones((6, 6), np.uint8) # 3
+        kernel = np.ones((6, 6), np.uint8)  # 3
         ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         # cv2.imshow('thresh', img_hsv)
         img_edge2 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
@@ -310,7 +310,7 @@ class CardPredictor:
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('gray', img_hsv)
-        kernel = np.ones((6, 6), np.uint8) # 3
+        kernel = np.ones((6, 6), np.uint8)  # 3
         ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         # cv2.imshow('thresh', img_hsv)
         img_edge2 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
@@ -394,7 +394,7 @@ class CardPredictor:
                     xr = j
         return xl, xr, yh, yl
 
-    def predict(self, car_pic, resize_rate=1):
+    def predict(self, car_pic, resize_rate=1, ch_cnt=1):
         if type(car_pic) == type(""):
             img = imreadex(car_pic)
         else:
@@ -743,6 +743,7 @@ class CardPredictor:
                     w = part_card.shape[1] // 3
                     part_card = cv2.copyMakeBorder(part_card, 0, 0, w, w, cv2.BORDER_CONSTANT, value=[0, 0, 0])
                     part_card = cv2.resize(part_card, (SZ, SZ), interpolation=cv2.INTER_AREA)
+                    # print(part_card_old.shape)
                     # cv2.imshow("part", part_card_old)
                     # cv2.waitKey(0)
                     # cv2.imwrite("u.jpg", part_card)
@@ -750,10 +751,14 @@ class CardPredictor:
                     part_card = preprocess_hog([part_card])
                     if i == 0:
                         resp = self.modelchinese.predict(part_card)
+                        # print("chinese_shape", resp)
                         charactor = provinces[int(resp[0]) - PROVINCE_START]
+                        # cv2.imwrite(f'chinese/{provinces[int(resp[0]) - PROVINCE_START - 1]}_{ch_cnt}.jpg',
+                        #             part_card_old)
                     else:
                         resp = self.model.predict(part_card)
                         charactor = chr(int(resp[0]))
+                    # print(charactor)
                     # 判断最后一个数是否是车牌边缘，假设车牌边缘被认为是1
                     if charactor == "1" and i == len(part_cards) - 1:
                         if part_card_old.shape[0] / part_card_old.shape[1] >= 8:  # 1太细，认为是边缘
@@ -772,7 +777,7 @@ if __name__ == '__main__':
     c.train_svm()
     # cA019W2 偏斜的图片 沪D71603
     r, roi, color = c.predict(
-        "test/cA019W2.jpg")
+        "test/car3.jpg")
     print(r)
     x = ''.join(r)
     print(x)
