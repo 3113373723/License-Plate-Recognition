@@ -285,8 +285,8 @@ class CardPredictor:
             point_limit(left_point)
             point_limit(right_point)
             ret_img = card_img[low_point[1]:heigth_point[1], left_point[0]:right_point[0]]
-            cv2.imshow("ret", ret_img)
-            cv2.waitKey(0)
+            # cv2.imshow("ret", ret_img)
+            # cv2.waitKey(0)
         return ret_img
 
     def accurate_place_color_green(self, card_img):
@@ -350,8 +350,8 @@ class CardPredictor:
             point_limit(left_point)
             point_limit(right_point)
             ret_img = card_img[low_point[1]:heigth_point[1], left_point[0]:right_point[0]]
-            cv2.imshow("ret_green", ret_img)
-            cv2.waitKey(0)
+            # cv2.imshow("ret_green", ret_img)
+            # cv2.waitKey(0)
         return ret_img
 
     def accurate_place(self, card_img_hsv, limit1, limit2, color):
@@ -415,7 +415,7 @@ class CardPredictor:
         oldimg = img.copy()
         if blur > 0:
             img = cv2.GaussianBlur(img, (blur, blur), 0)  # 图片分辨率调整
-        cv2.imshow('blur', img)
+        # cv2.imshow('blur', img)
 
         # black_pixels = np.where(
         #     (img[:, :, 0] == 0) & 
@@ -444,8 +444,8 @@ class CardPredictor:
         # img_hsv = cv2.bitwise_not(hsv, hsv, mask=mask_black)
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
-        cv2.imshow('hsv', img_hsv)
-        cv2.waitKey(0)
+        # cv2.imshow('hsv', img_hsv)
+        # cv2.waitKey(0)
         # 灰度化
         # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('Gray', img)
@@ -462,7 +462,7 @@ class CardPredictor:
         # 二值化 Otsu 滤波
         # 第一个retVal（得到的阈值值），第二个就是阈值化后的图像。
         ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        cv2.imshow('erzhihua', img_thresh)
+        # cv2.imshow('erzhihua', img_thresh)
         # sobel 边缘检测
         # img_edge = cv2.Canny(img_thresh, 100, 200)
         # cv2.imshow('edge', img_edge)
@@ -473,7 +473,7 @@ class CardPredictor:
         img_edge1 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow('edge1', img_edge1)
         img_edge2 = cv2.morphologyEx(img_edge1, cv2.MORPH_OPEN, kernel)
-        cv2.imshow('edge2', img_edge2)
+        # cv2.imshow('edge2', img_edge2)
 
         # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
         try:
@@ -500,7 +500,7 @@ class CardPredictor:
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
                 newimg = cv2.drawContours(line_img, [box], 0, (0, 0, 255), 2)
-                cv2.imshow("edge4", newimg)
+                # cv2.imshow("edge4", newimg)
                 # cv2.waitKey(0)
 
         print(len(car_contours))
@@ -541,8 +541,8 @@ class CardPredictor:
                 point_limit(left_point)
                 card_img = dst[int(left_point[1]):int(heigth_point[1]), int(left_point[0]):int(new_right_point[0])]
                 card_imgs.append(card_img)
-                cv2.imshow("card_positive", card_img)
-                cv2.waitKey(0)
+                # cv2.imshow("card_positive", card_img)
+                # cv2.waitKey(0)
             elif low_point[0] < heigth_point[0]:  # 负角度
                 new_left_point = [left_point[0], heigth_point[1]]
                 pts2 = np.float32([new_left_point, heigth_point, right_point])  # 字符只是高度需要改变
@@ -554,8 +554,8 @@ class CardPredictor:
                 point_limit(new_left_point)
                 card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
                 card_imgs.append(card_img)
-                cv2.imshow("card", card_img)
-                cv2.waitKey(0)
+                # cv2.imshow("card", card_img)
+                # cv2.waitKey(0)
 
             # 判断是否偏斜，矫正偏斜的情况
 
@@ -663,6 +663,8 @@ class CardPredictor:
         for i, color in enumerate(colors):
             if color in ("blue", "yello", "green"):
                 card_img = card_imgs[i]
+                if card_img.size == 0:
+                    continue
                 gray_img = cv2.cvtColor(card_img, cv2.COLOR_BGR2GRAY)
                 # 黄、绿车牌字符比背景暗、与蓝车牌刚好相反，所以黄、绿车牌需要反向
                 if color == "green" or color == "yello":
@@ -674,12 +676,14 @@ class CardPredictor:
                 x_average = np.sum(x_histogram) / x_histogram.shape[0]
                 x_threshold = (x_min + x_average) / 2
                 wave_peaks = find_waves(x_threshold, x_histogram)
+                # print("wave_peaks", wave_peaks)
                 if len(wave_peaks) == 0:
                     print("peak less 0:")
                     continue
                 # 认为水平方向，最大的波峰为车牌区域
                 wave = max(wave_peaks, key=lambda x: x[1] - x[0])
                 gray_img = gray_img[wave[0]:wave[1]]
+                # cv2.imshow("detect", gray_img)
                 # 查找垂直直方图波峰
                 row_num, col_num = gray_img.shape[:2]
                 # 去掉车牌上下边缘1个像素，避免白边影响阈值判断
@@ -717,6 +721,8 @@ class CardPredictor:
                     wave_peaks.insert(0, wave)
 
                 # 去除车牌上的分隔点
+                if len(wave_peaks) <= 2:
+                    continue
                 point = wave_peaks[2]
                 if point[1] - point[0] < max_wave_dis / 3:
                     point_img = gray_img[:, point[0]:point[1]]
@@ -768,4 +774,6 @@ if __name__ == '__main__':
     r, roi, color = c.predict(
         "test/cA019W2.jpg")
     print(r)
+    x = ''.join(r)
+    print(x)
     turtle.done()
