@@ -7,6 +7,8 @@ import sys
 import os
 import json
 
+import matplotlib.pyplot as plt
+
 SZ = 20  # 训练图片长宽
 MAX_WIDTH = 1000  # 原始图片最大宽度
 Min_Area = 2000  # 车牌区域允许最大面积
@@ -55,17 +57,21 @@ def seperate_card(img, waves):
 
 
 # 来自opencv的sample，用于svm训练
+# 使用方向梯度直方图Histogram of Oriented Gradients （HOG）作为特征向量
+# 对一个图像进行抗扭斜（deskew）处理，把歪了的图片摆正
 def deskew(img):
-    m = cv2.moments(img)
+    m = cv2.moments(img)  # 计算图像中的中心矩(最高到三阶)
     if abs(m['mu02']) < 1e-2:
         return img.copy()
     skew = m['mu11'] / m['mu02']
     M = np.float32([[1, skew, -0.5 * SZ * skew], [0, 1, 0]])
+    # 图像的平移，参数:输入图像、变换矩阵、变换后的大小
     img = cv2.warpAffine(img, M, (SZ, SZ), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
     return img
 
 
 # 来自opencv的sample，用于svm训练
+#  hot，用于从图片中抽取特征向量
 def preprocess_hog(digits):
     samples = []
     for img in digits:
@@ -123,6 +129,18 @@ provinces = [
     "zh_zang", "藏",
     "zh_zhe", "浙"
 ]
+
+
+# 绘制直方图 axis=0展示水平直方图 axis=1展示垂直直方图
+def draw_hist(pt, axis=0):
+    rows = len(pt)
+    row = [i for i in range(rows)]
+    if axis == 0:
+        plt.barh(row, pt, color='black', height=1)
+    else:
+        print("i am here")
+        plt.bar(row, pt, color='black', width=1)
+    plt.show()
 
 
 class StatModel(object):
@@ -565,6 +583,7 @@ class CardPredictor:
             # card_imgs[card_index] = self.accurate_place_color(card_img)
             green = yello = blue = black = white = 0
             # cv2.imshow('hsv1', card_img)
+            # cv2.waitKey(0)
             card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
             card_img = card_imgs[card_index]
             # cv2.imshow('hsv2', card_img_hsv)
@@ -598,7 +617,7 @@ class CardPredictor:
                 color = "yello"
                 limit1 = 11
                 limit2 = 34  # 有的图片有色偏偏绿
-            elif blue * 2 >= card_img_count:
+            elif blue * 2.5 >= card_img_count:
                 color = "blue"
                 limit1 = 100
                 limit2 = 124  # 有的图片有色偏偏紫
@@ -663,15 +682,22 @@ class CardPredictor:
         for i, color in enumerate(colors):
             if color in ("blue", "yello", "green"):
                 card_img = card_imgs[i]
+                # cv2.imwrite(f'chinese/test.jpg', card_img)
                 if card_img.size == 0:
                     continue
                 gray_img = cv2.cvtColor(card_img, cv2.COLOR_BGR2GRAY)
+                # cv2.imshow(f'{i}', gray_img)
+                # cv2.waitKey(0)
+                # cv2.imwrite(f'chinese/1.jpg', gray_img)
                 # 黄、绿车牌字符比背景暗、与蓝车牌刚好相反，所以黄、绿车牌需要反向
                 if color == "green" or color == "yello":
                     gray_img = cv2.bitwise_not(gray_img)
                 ret, gray_img = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                # cv2.imshow("2", gray_img)
+                # cv2.imwrite(f'chinese/2.jpg', gray_img)
                 # 查找水平直方图波峰
                 x_histogram = np.sum(gray_img, axis=1)
+                # draw_hist(x_histogram)
                 x_min = np.min(x_histogram)
                 x_average = np.sum(x_histogram) / x_histogram.shape[0]
                 x_threshold = (x_min + x_average) / 2
@@ -683,12 +709,16 @@ class CardPredictor:
                 # 认为水平方向，最大的波峰为车牌区域
                 wave = max(wave_peaks, key=lambda x: x[1] - x[0])
                 gray_img = gray_img[wave[0]:wave[1]]
-                # cv2.imshow("detect", gray_img)
+                # if i==3:
+                #     cv2.imshow("detect", gray_img)
+                # cv2.imwrite(f'chinese/3.jpg', gray_img)
                 # 查找垂直直方图波峰
                 row_num, col_num = gray_img.shape[:2]
                 # 去掉车牌上下边缘1个像素，避免白边影响阈值判断
-                gray_img = gray_img[1:row_num - 1]
+                # gray_img = gray_img[1:row_num - 1]
                 y_histogram = np.sum(gray_img, axis=0)
+                # if i == 3:
+                #     draw_hist(y_histogram, axis=1)
                 y_min = np.min(y_histogram)
                 y_average = np.sum(y_histogram) / y_histogram.shape[0]
                 y_threshold = (y_min + y_average) / 5  # U和0要求阈值偏小，否则U和0会被分成两半
@@ -739,6 +769,8 @@ class CardPredictor:
                         print("a point")
                         continue
                     part_card_old = part_card
+                    # cv2.imshow("part", part_card_old)
+                    # cv2.waitKey(0)
                     # w = abs(part_card.shape[1] - SZ)//2
                     w = part_card.shape[1] // 3
                     part_card = cv2.copyMakeBorder(part_card, 0, 0, w, w, cv2.BORDER_CONSTANT, value=[0, 0, 0])
@@ -764,6 +796,9 @@ class CardPredictor:
                         if part_card_old.shape[0] / part_card_old.shape[1] >= 8:  # 1太细，认为是边缘
                             print(part_card_old.shape)
                             continue
+                    # cv2.imwrite(f'chinese/{charactor}.jpg',
+                    #             part_card_old)
+
                     predict_result.append(charactor)
                 roi = card_img
                 card_color = color
@@ -776,9 +811,11 @@ if __name__ == '__main__':
     c = CardPredictor()
     c.train_svm()
     # cA019W2 偏斜的图片 沪D71603
+    cur_dir = sys.path[0]
     r, roi, color = c.predict(
         "test/car3.jpg")
     print(r)
     x = ''.join(r)
     print(x)
+    print(cur_dir)
     turtle.done()
