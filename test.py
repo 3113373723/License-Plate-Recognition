@@ -12,6 +12,7 @@ if __name__ == '__main__':
     self.predictor.train_svm()
     cnt = 0
     correct = 0
+    pic = 0
     for root, dirs, files in os.walk("carplate//val"):
         for filename in files:
             filepath = os.path.join(root, filename)
@@ -27,11 +28,15 @@ if __name__ == '__main__':
                 # if r:
                 #     break
             r = ''.join(r)
-            if re.match(r, filename) is not None:
+            print("r:", r, "filename:", filename)
+            if r != '' and re.match(r, filename) is not None:
                 correct += 1
+            if roi is not  None:
+                pic+=1
 
-    var = correct * 100 / cnt
+    var = correct * 100 / pic
     print("正确率:", var, "%")
     print("cnt:", cnt)
     print("correct:", correct)
+    print("pic:", pic)
 
