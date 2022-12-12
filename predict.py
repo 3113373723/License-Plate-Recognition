@@ -7,7 +7,12 @@ import sys
 import os
 import json
 
-import matplotlib.pyplot as plt
+from tensorflow import keras
+
+from CNN import cnn_predict
+from skimage import io, transform
+
+# import matplotlib.pyplot as plt
 
 SZ = 20  # 训练图片长宽
 MAX_WIDTH = 1000  # 原始图片最大宽度
@@ -679,8 +684,13 @@ class CardPredictor:
         predict_result = []
         roi = None
         card_color = None
+        cnn = keras.models.load_model('cnn.h5')
+        # print('正在启动中,请稍等...')
+        # cnn_predict(cnn, [np.zeros((80, 240, 3))])
+        # print("已启动,开始识别吧！")
         for i, color in enumerate(colors):
             if color in ("blue", "yello", "green"):
+
                 card_img = card_imgs[i]
                 # cv2.imwrite(f'chinese/test.jpg', card_img)
                 if card_img.size == 0:
@@ -802,6 +812,26 @@ class CardPredictor:
                     predict_result.append(charactor)
                 roi = card_img
                 card_color = color
+                # break
+
+
+                # print("before reshape", card_img.shape)
+                # cv2.imshow("before'", card_img)
+                roi = card_img.copy()
+                # resize图片大小 先将原本的---> (80,240,3)
+                # card_img = transform.resize(card_img, (80,240))
+                card_img = cv2.resize(card_img, dsize=(240, 80), interpolation=cv2.INTER_AREA)[:, :,
+                           :3]  # 直接resize为(240,80)
+                # 查看reshape后的图片shape
+                # print("after reshape", card_img.shape)
+                # cv2.imshow("after'", card_img)
+                Lic_pred = cnn_predict(cnn, [card_img])  # 利用cnn进行车牌的识别预测,Lic_pred中存的是元祖(车牌图片,识别结果)
+                # print(Lic_pred)
+                if len(Lic_pred) > 0 and Lic_pred[0] is not None:
+                    predict_result = Lic_pred[0][1]
+                else:
+                    continue
+                card_color = color
                 break
 
         return predict_result, roi, card_color  # 识别到的字符、定位的车牌图像、车牌颜色
@@ -813,7 +843,7 @@ if __name__ == '__main__':
     # cA019W2 偏斜的图片 沪D71603
     cur_dir = sys.path[0]
     r, roi, color = c.predict(
-        "test/car3.jpg")
+        "test/cA019W2.jpg")
     print(r)
     x = ''.join(r)
     print(x)
