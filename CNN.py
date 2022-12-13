@@ -1,5 +1,7 @@
 # -*- coding:utf-8 -*-
 # author: DuanshengLiu
+import timeit
+
 from tensorflow.keras import layers, losses, models
 import numpy as np
 import cv2
@@ -62,7 +64,9 @@ def cnn_predict(cnn, Lic_img):
                   "N", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
     Lic_pred = []
     for lic in Lic_img:
+        # print("1:", timeit.default_timer())
         lic_pred = cnn.predict(lic.reshape(1, 80, 240, 3))  # 预测形状应为(1,80,240,3)
+        # print("2:", timeit.default_timer())
         lic_pred = np.array(lic_pred).reshape(7, 65)  # 列表转为ndarray，形状为(7,65)
         if len(lic_pred[lic_pred >= 0.8]) >= 4:  # 统计其中预测概率值大于80%以上的个数，大于等于4个以上认为识别率高，识别成功
             chars = ''

@@ -105,6 +105,7 @@ class Surface(ttk.Frame):
 		self.thread_run = False
 		self.pic_path = askopenfilename(title="选择识别图片", filetypes=[("jpg图片", "*.jpg")])
 		if self.pic_path:
+			print("img_path", self.pic_path)
 			img_bgr = predict.imreadex(self.pic_path)
 			self.imgtk = self.get_imgtk(img_bgr)
 			self.image_ctl.configure(image=self.imgtk)

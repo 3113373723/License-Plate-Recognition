@@ -1,3 +1,4 @@
+import timeit
 import turtle
 import math
 import cv2
@@ -190,6 +191,7 @@ class CardPredictor:
                 raise RuntimeError('没有设置有效配置参数')
         self.unet = keras.models.load_model('unet.h5')
         self.cnn = keras.models.load_model('cnn.h5')
+        cnn_predict(self.cnn, [np.zeros((80, 240, 3))])
 
     def __del__(self):
         self.save_traindata()
@@ -424,19 +426,24 @@ class CardPredictor:
 
 
     def predict_cnn(self, car_path, resize_rate=1):
-        unet = keras.models.load_model('unet.h5')
-        img_src, img_mask = unet_predict(unet, car_path)
+        print("cnn_1:", timeit.default_timer())
+        # print("1:", timeit.default_timer())
+        img_src, img_mask = unet_predict(self.unet, car_path)
+        # print("2:", timeit.default_timer())
         # cv2.imshow("img", img_src)
         img_src_copy, Lic_img = locate_and_correct(img_src, img_mask)  # 利用core.py中的locate_and_correct函数进行车牌定位和矫正
+        # print("3:", timeit.default_timer())
         # print(len(Lic_img))
         # cv2.imshow("Lic", Lic_img[0])
         Lic_pred = cnn_predict(self.cnn, Lic_img)  # 利用cnn进行车牌的识别预测,Lic_pred中存的是元祖(车牌图片,识别结果)
+        # print("4:", timeit.default_timer())
         # print(Lic_pred)
         predict_result = []
         roi = None
         if len(Lic_pred) > 0 and Lic_pred[0] is not None:
             predict_result = Lic_pred[0][1]
             roi = Lic_pred[0][0]
+        print("cnn_2:", timeit.default_timer())
         return predict_result, roi
 
     def predict(self, car_pic, resize_rate=1):
