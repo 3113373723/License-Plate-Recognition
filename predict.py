@@ -249,9 +249,9 @@ class CardPredictor:
             self.modelchinese.train(chars_train, chars_label)
 
     def save_traindata(self):
-        if not os.path.exists("svm.dat"):
+        if os.path and not os.path.exists("svm.dat"):
             self.model.save("svm.dat")
-        if not os.path.exists("svmchinese.dat"):
+        if os.path and not os.path.exists("svmchinese.dat"):
             self.modelchinese.save("svmchinese.dat")
 
     def accurate_place_color(self, card_img):
