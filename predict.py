@@ -12,6 +12,9 @@ from tensorflow import keras
 from CNN import cnn_predict
 from skimage import io, transform
 
+from Unet import unet_predict
+from core import locate_and_correct
+
 # import matplotlib.pyplot as plt
 
 SZ = 20  # 训练图片长宽
@@ -183,8 +186,10 @@ class CardPredictor:
             if c["open"]:
                 self.cfg = c.copy()
                 break
-        else:
-            raise RuntimeError('没有设置有效配置参数')
+            else:
+                raise RuntimeError('没有设置有效配置参数')
+        self.unet = keras.models.load_model('unet.h5')
+        self.cnn = keras.models.load_model('cnn.h5')
 
     def __del__(self):
         self.save_traindata()
@@ -417,7 +422,24 @@ class CardPredictor:
                     xr = j
         return xl, xr, yh, yl
 
-    def predict(self, car_pic, resize_rate=1, ch_cnt=1):
+
+    def predict_cnn(self, car_path, resize_rate=1):
+        unet = keras.models.load_model('unet.h5')
+        img_src, img_mask = unet_predict(unet, car_path)
+        # cv2.imshow("img", img_src)
+        img_src_copy, Lic_img = locate_and_correct(img_src, img_mask)  # 利用core.py中的locate_and_correct函数进行车牌定位和矫正
+        # print(len(Lic_img))
+        # cv2.imshow("Lic", Lic_img[0])
+        Lic_pred = cnn_predict(self.cnn, Lic_img)  # 利用cnn进行车牌的识别预测,Lic_pred中存的是元祖(车牌图片,识别结果)
+        # print(Lic_pred)
+        predict_result = []
+        roi = None
+        if len(Lic_pred) > 0 and Lic_pred[0] is not None:
+            predict_result = Lic_pred[0][1]
+            roi = Lic_pred[0][0]
+        return predict_result, roi
+
+    def predict(self, car_pic, resize_rate=1):
         if type(car_pic) == type(""):
             img = imreadex(car_pic)
         else:
@@ -684,7 +706,6 @@ class CardPredictor:
         predict_result = []
         roi = None
         card_color = None
-        cnn = keras.models.load_model('cnn.h5')
         # print('正在启动中,请稍等...')
         # cnn_predict(cnn, [np.zeros((80, 240, 3))])
         # print("已启动,开始识别吧！")
@@ -825,7 +846,7 @@ class CardPredictor:
                 # 查看reshape后的图片shape
                 # print("after reshape", card_img.shape)
                 # cv2.imshow("after'", card_img)
-                Lic_pred = cnn_predict(cnn, [card_img])  # 利用cnn进行车牌的识别预测,Lic_pred中存的是元祖(车牌图片,识别结果)
+                Lic_pred = cnn_predict(self.cnn, [card_img])  # 利用cnn进行车牌的识别预测,Lic_pred中存的是元祖(车牌图片,识别结果)
                 # print(Lic_pred)
                 if len(Lic_pred) > 0 and Lic_pred[0] is not None:
                     predict_result = Lic_pred[0][1]
@@ -842,8 +863,10 @@ if __name__ == '__main__':
     c.train_svm()
     # cA019W2 偏斜的图片 沪D71603
     cur_dir = sys.path[0]
-    r, roi, color = c.predict(
-        "test/cA019W2.jpg")
+    # r, roi, color = c.predict(
+    #     "test/cA019W2.jpg")
+    r, roi = c.predict_cnn(
+        "test/car3.jpg")
     print(r)
     x = ''.join(r)
     print(x)
