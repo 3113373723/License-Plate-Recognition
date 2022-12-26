@@ -2,6 +2,7 @@ import timeit
 import turtle
 import math
 import cv2
+import matplotlib
 import numpy as np
 from numpy.linalg import norm
 import sys
@@ -329,20 +330,10 @@ class CardPredictor:
     def accurate_place_color_green(self, card_img):
         pic_hight, pic_width = card_img.shape[:2]
         # 通过颜色识别区域
-        lower_blue = np.array([100, 73, 46])
-        upper_blue = np.array([130, 255, 255])
-        lower_yellow = np.array([11, 43, 46])
-        upper_yellow = np.array([34, 255, 255])
         lower_green = np.array([10, 30, 46])
         upper_green = np.array([99, 255, 255])
-        # lower_black = np.array([0, 0, 0])
-        # upper_black = np.array([180, 255, 46])
         hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
-        mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
-        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-        # mask_black = cv2.inRange(hsv, lower_black, upper_black)
         mask_green = cv2.inRange(hsv, lower_green, upper_green)
-        # img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow)
         img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_green)
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
@@ -350,8 +341,6 @@ class CardPredictor:
         kernel = np.ones((6, 6), np.uint8)  # 3
         ret, img_thresh = cv2.threshold(img_hsv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         # cv2.imshow('thresh', img_hsv)
-        img_edge2 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
-        # cv2.imshow('edge2', img_edge2)
         # 查找图像边缘整体形成的矩形区域，可能有很多，车牌就在其中一个矩形区域中
         try:
             contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -393,8 +382,6 @@ class CardPredictor:
 
     def accurate_place(self, card_img_hsv, limit1, limit2, color):
         # print("accurate_place", card_img_hsv.shape)
-        # cv2.imshow('hsv1', card_img_hsv)
-        # cv2.waitKey(0)
         row_num, col_num = card_img_hsv.shape[:2]
         xl = col_num
         xr = 0
@@ -433,18 +420,9 @@ class CardPredictor:
 
 
     def predict_cnn(self, car_path, resize_rate=1):
-        print("cnn_1:", timeit.default_timer())
-        # print("1:", timeit.default_timer())
         img_src, img_mask = unet_predict(self.unet, car_path)
-        # print("2:", timeit.default_timer())
-        # cv2.imshow("img", img_src)
         img_src_copy, Lic_img = locate_and_correct(img_src, img_mask)  # 利用core.py中的locate_and_correct函数进行车牌定位和矫正
-        # print("3:", timeit.default_timer())
-        # print(len(Lic_img))
-        # cv2.imshow("Lic", Lic_img[0])
         Lic_pred = cnn_predict(self.cnn, Lic_img)  # 利用cnn进行车牌的识别预测,Lic_pred中存的是元祖(车牌图片,识别结果)
-        # print("4:", timeit.default_timer())
-        # print(Lic_pred)
         predict_result = []
         roi = None
         if len(Lic_pred) > 0 and Lic_pred[0] is not None:
@@ -476,14 +454,6 @@ class CardPredictor:
             img = cv2.GaussianBlur(img, (blur, blur), 0)  # 图片分辨率调整
         # cv2.imshow('blur', img)
 
-        # black_pixels = np.where(
-        #     (img[:, :, 0] == 0) & 
-        #     (img[:, :, 1] == 0) & 
-        #     (img[:, :, 2] == 0)
-        # )
-        # img[black_pixels] = [255, 255, 255]
-        # cv2.imshow('img', img)
-
         # 通过颜色识别区域
         lower_blue = np.array([100, 43, 46])
         upper_blue = np.array([130, 255, 255])
@@ -491,31 +461,18 @@ class CardPredictor:
         upper_yellow = np.array([34, 255, 255])
         lower_green = np.array([35, 43, 46])
         upper_green = np.array([99, 255, 255])
-        # lower_black = np.array([0, 0, 0])
-        # upper_black = np.array([180, 255, 46])
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
         mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
         mask_green = cv2.inRange(hsv, lower_green, upper_green)
-        # mask_black = cv2.inRange(hsv, lower_black, upper_black)
         img_hsv = cv2.bitwise_and(hsv, hsv, mask=mask_blue + mask_yellow + mask_green)
-        # img_hsv = cv2.bitwise_and(hsv, hsv ,mask=mask_green)
-        # img_hsv = cv2.bitwise_not(hsv, hsv, mask=mask_black)
         # 根据阈值找到对应颜色 并灰度化
         img_hsv = cv2.cvtColor(img_hsv, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('hsv', img_hsv)
         # cv2.waitKey(0)
         # 灰度化
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # cv2.imshow('Gray', img)
-        # equ = cv2.equalizeHist(img)
-        # img = np.hstack((img, equ))
         # 去掉图像中不会是车牌的区域
         kernel = np.ones((6, 6), np.uint8)
-        # img_opening = cv2.morphologyEx(img_hsv, cv2.MORPH_OPEN, kernel)
-        # cv2.imshow('open', img_opening)
-        # img_opening = cv2.addWeighted(img_hsv, 1, img_opening, -1, 0)
-        # cv2.imshow('origin', img_opening)
 
         # 找到图像边缘
         # 二值化 Otsu 滤波
@@ -526,8 +483,6 @@ class CardPredictor:
         # img_edge = cv2.Canny(img_thresh, 100, 200)
         # cv2.imshow('edge', img_edge)
         # 使用开运算和闭运算让图像边缘成为一个整体
-        # 4 19
-        # kernel = np.ones((self.cfg["morphologyr"], self.cfg["morphologyc"]), np.uint8)
         # 先开操作消除 后闭操作连接
         img_edge1 = cv2.morphologyEx(img_thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow('edge1', img_edge1)
@@ -621,13 +576,11 @@ class CardPredictor:
         # 开始使用颜色定位，排除不是车牌的矩形，目前只识别蓝、绿、黄车牌
         colors = []
         for card_index, card_img in enumerate(card_imgs):
-            # card_imgs[card_index] = self.accurate_place_color(card_img)
             green = yello = blue = black = white = 0
             # cv2.imshow('hsv1', card_img)
             # cv2.waitKey(0)
             card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
             card_img = card_imgs[card_index]
-            # cv2.imshow('hsv2', card_img_hsv)
             # 有转换失败的可能，原因来自于上面矫正矩形出错
             if card_img_hsv is None:
                 continue
@@ -681,65 +634,22 @@ class CardPredictor:
                 card_imgs[card_index] = self.accurate_place_color_green(card_img)
             else:
                 card_imgs[card_index] = self.accurate_place_color(card_img)
-            # xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
-            # if yl == yh and xl == xr:
-            #     continue
-            # need_accurate = False
-            # if yl >= yh:
-            #     yl = 0
-            #     yh = row_num
-            #     need_accurate = True
-            # if xl >= xr:
-            #     xl = 0
-            #     xr = col_num
-            #     need_accurate = True
-            # cv2.imshow("before", card_img)
-            # card_imgs[card_index] = card_img[yl:yh, xl:xr] if color != "green" or yl < (yh - yl) // 4 else card_img[
-            #                                                                                                yl - (
-            #                                                                                                        yh - yl) // 4:yh,
-            #                                                                                                xl:xr]
-            # cv2.imshow("after", card_imgs[card_index])
-            # if need_accurate:  # 可能x或y方向未缩小，需要再试一次
-            #     card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
-            #     xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
-            #     self.accurate_place_color(card_img)
-            #     if yl == yh and xl == xr:
-            #         continue
-            #     if yl >= yh:
-            #         yl = 0
-            #         yh = row_num
-            #     if xl >= xr:
-            #         xl = 0
-            #         xr = col_num
-            # card_imgs[card_index] = card_img[yl:yh, xl:xr] if color != "green" or yl < (yh - yl) // 4 else card_img[
-            #                                                                                                yl - (
-            #                                                                                                        yh - yl) // 4:yh,
-            #                                                                                                xl:xr]
         # 以上为车牌定位
         # 以下为识别车牌中的字符
         predict_result = []
         roi = None
         card_color = None
-        # print('正在启动中,请稍等...')
-        # cnn_predict(cnn, [np.zeros((80, 240, 3))])
-        # print("已启动,开始识别吧！")
         for i, color in enumerate(colors):
             if color in ("blue", "yello", "green"):
 
                 card_img = card_imgs[i]
-                # cv2.imwrite(f'chinese/test.jpg', card_img)
                 if card_img.size == 0:
                     continue
                 gray_img = cv2.cvtColor(card_img, cv2.COLOR_BGR2GRAY)
-                # cv2.imshow(f'{i}', gray_img)
-                # cv2.waitKey(0)
-                # cv2.imwrite(f'chinese/1.jpg', gray_img)
                 # 黄、绿车牌字符比背景暗、与蓝车牌刚好相反，所以黄、绿车牌需要反向
                 if color == "green" or color == "yello":
                     gray_img = cv2.bitwise_not(gray_img)
                 ret, gray_img = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                # cv2.imshow("2", gray_img)
-                # cv2.imwrite(f'chinese/2.jpg', gray_img)
                 # 查找水平直方图波峰
                 x_histogram = np.sum(gray_img, axis=1)
                 draw_hist(x_histogram)
@@ -754,9 +664,6 @@ class CardPredictor:
                 # 认为水平方向，最大的波峰为车牌区域
                 wave = max(wave_peaks, key=lambda x: x[1] - x[0])
                 gray_img = gray_img[wave[0]:wave[1]]
-                # if i==3:
-                #     cv2.imshow("detect", gray_img)
-                # cv2.imwrite(f'chinese/3.jpg', gray_img)
                 # 查找垂直直方图波峰
                 row_num, col_num = gray_img.shape[:2]
                 # 去掉车牌上下边缘1个像素，避免白边影响阈值判断
@@ -819,29 +726,18 @@ class CardPredictor:
                     w = part_card.shape[1] // 3
                     part_card = cv2.copyMakeBorder(part_card, 0, 0, w, w, cv2.BORDER_CONSTANT, value=[0, 0, 0])
                     part_card = cv2.resize(part_card, (SZ, SZ), interpolation=cv2.INTER_AREA)
-                    # print(part_card_old.shape)
-                    # cv2.imshow("part", part_card_old)
-                    # cv2.waitKey(0)
-                    # cv2.imwrite("u.jpg", part_card)
-                    # part_card = deskew(part_card)
                     part_card = preprocess_hog([part_card])
                     if i == 0:
                         resp = self.modelchinese.predict(part_card)
-                        # print("chinese_shape", resp)
                         charactor = provinces[int(resp[0]) - PROVINCE_START]
-                        # cv2.imwrite(f'chinese/{provinces[int(resp[0]) - PROVINCE_START - 1]}_{ch_cnt}.jpg',
-                        #             part_card_old)
                     else:
                         resp = self.model.predict(part_card)
                         charactor = chr(int(resp[0]))
-                    # print(charactor)
                     # 判断最后一个数是否是车牌边缘，假设车牌边缘被认为是1
                     if charactor == "1" and i == len(part_cards) - 1:
                         if part_card_old.shape[0] / part_card_old.shape[1] >= 8:  # 1太细，认为是边缘
                             print(part_card_old.shape)
                             continue
-                    # cv2.imwrite(f'chinese/{charactor}.jpg',
-                    #             part_card_old)
 
                     predict_result.append(charactor)
                 roi = card_img
@@ -849,18 +745,14 @@ class CardPredictor:
                 # break
 
 
-                # print("before reshape", card_img.shape)
-                # cv2.imshow("before'", card_img)
                 roi = card_img.copy()
                 # resize图片大小 先将原本的---> (80,240,3)
-                # card_img = transform.resize(card_img, (80,240))
                 card_img = cv2.resize(card_img, dsize=(240, 80), interpolation=cv2.INTER_AREA)[:, :,
                            :3]  # 直接resize为(240,80)
                 # 查看reshape后的图片shape
                 # print("after reshape", card_img.shape)
                 # cv2.imshow("after'", card_img)
                 Lic_pred = cnn_predict(self.cnn, [card_img])  # 利用cnn进行车牌的识别预测,Lic_pred中存的是元祖(车牌图片,识别结果)
-                # print(Lic_pred)
                 if len(Lic_pred) > 0 and Lic_pred[0] is not None:
                     predict_result = Lic_pred[0][1]
                 else:
