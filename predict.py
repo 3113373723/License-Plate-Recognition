@@ -16,7 +16,7 @@ from skimage import io, transform
 from Unet import unet_predict
 from core import locate_and_correct
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 SZ = 20  # 训练图片长宽
 MAX_WIDTH = 1000  # 原始图片最大宽度
@@ -144,10 +144,17 @@ provinces = [
 def draw_hist(pt, axis=0):
     rows = len(pt)
     row = [i for i in range(rows)]
+    zhfont1 = matplotlib.font_manager.FontProperties(fname="D:\TongjiPatternRecognition\SourceHanSansSC-Normal.otf")
     if axis == 0:
+        plt.title("水平方向像素点累计和", fontproperties=zhfont1)
+        plt.xlabel("像素", fontproperties=zhfont1)
+        plt.ylabel("列值", fontproperties=zhfont1)
         plt.barh(row, pt, color='black', height=1)
     else:
         print("i am here")
+        plt.title("垂直方向像素点累计和", fontproperties=zhfont1)
+        plt.xlabel("行值", fontproperties=zhfont1)
+        plt.ylabel("像素", fontproperties=zhfont1)
         plt.bar(row, pt, color='black', width=1)
     plt.show()
 
@@ -735,7 +742,7 @@ class CardPredictor:
                 # cv2.imwrite(f'chinese/2.jpg', gray_img)
                 # 查找水平直方图波峰
                 x_histogram = np.sum(gray_img, axis=1)
-                # draw_hist(x_histogram)
+                draw_hist(x_histogram)
                 x_min = np.min(x_histogram)
                 x_average = np.sum(x_histogram) / x_histogram.shape[0]
                 x_threshold = (x_min + x_average) / 2
@@ -755,8 +762,7 @@ class CardPredictor:
                 # 去掉车牌上下边缘1个像素，避免白边影响阈值判断
                 # gray_img = gray_img[1:row_num - 1]
                 y_histogram = np.sum(gray_img, axis=0)
-                # if i == 3:
-                #     draw_hist(y_histogram, axis=1)
+                draw_hist(y_histogram, axis=1)
                 y_min = np.min(y_histogram)
                 y_average = np.sum(y_histogram) / y_histogram.shape[0]
                 y_threshold = (y_min + y_average) / 5  # U和0要求阈值偏小，否则U和0会被分成两半
